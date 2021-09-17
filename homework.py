@@ -112,7 +112,7 @@ def main():
                     f'{len(hw_statuses_json["homeworks"])} шт.'
                 )
                 # pprint(hw_statuses_json)
-                for homework in hw_statuses_json['homeworks']:
+                for homework in reversed(hw_statuses_json['homeworks']):
                     verdict = parse_homework_status(homework)
                     send_message(verdict)
 
