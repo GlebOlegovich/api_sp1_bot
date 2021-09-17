@@ -59,7 +59,7 @@ def parse_homework_status(homework: Dict) -> str:
         message += f'{homework["status"]} в дз : {homework["homework_name"]} '
         raise ValueError(message)
     return (
-        f'У вас проверили работу "{homework["lesson_name"]} - {homework_name}"'
+        f'У вас проверили работу "{homework_name}" - {homework["lesson_name"]}'
         f'\nВремя: {homework["date_updated"]}!\n{verdict}'
     )
 
