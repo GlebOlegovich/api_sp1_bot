@@ -26,7 +26,9 @@ def get_file_handler():
 # как мне сделать это через стрим?
 def get_stream_handler():
     stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.ERROR)
+    # Сделал стриминг с дебага,  потому что на heroku.com нет возможности
+    # просматривать файл .log (его там вообще нет, видимо, не дает создавать)
+    stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(logging.Formatter(_log_format))
     return stream_handler
 
