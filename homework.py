@@ -10,8 +10,6 @@ from dotenv import load_dotenv
 
 import app_logger
 
-# from pprint import pprint
-
 
 load_dotenv()
 
@@ -37,26 +35,27 @@ STICKERS = {
             'UWeXOemidxMQACPgADspiaDv-4iTC3LFg0IAQ',
 }
 
-# проинициализируйте бота здесь,
-# чтобы он был доступен в каждом нижеобъявленном методе,
-# и не нужно было прокидывать его в каждый вызов
+
 bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
 
 def parse_homework_status(homework: Dict) -> str:
     homework_name = homework['homework_name']
-    if homework['status'] == 'rejected':
+    status = homework['status']
+
+    if status == 'rejected':
         verdict = 'К сожалению, в работе нашлись ошибки.'
-    elif homework['status'] == 'approved':
+    elif status == 'approved':
         verdict = 'Ревьюеру всё понравилось, работа зачтена!'
-    elif homework['status'] == 'reviewing':
+    elif status == 'reviewing':
         return (
             f'Работу "{homework["lesson_name"]} - {homework_name}"'
             f' взяли на проверку! ({homework["date_updated"]})'
         )
     else:
         message = 'Нам пришел json, со странным значением статуса : '
-        message += f'{homework["status"]} в дз : {homework["homework_name"]} '
+        message += f'{homework["status"]} в дз : {homework["homework_name"]}'
+        logger.warning(message)
         raise ValueError(message)
     return (
         f'У вас проверили работу "{homework_name}" - {homework["lesson_name"]}'
@@ -65,67 +64,100 @@ def parse_homework_status(homework: Dict) -> str:
 
 
 def get_homeworks(current_timestamp):
-    homework_statuses = requests.get(
-        YA_PRACTICUM_HW_URL,
-        headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
-        params={'from_date': current_timestamp}
-    )
-    if homework_statuses.status_code != HTTPStatus.OK:
-        raise ValueError(
-            f'Сервер отвалился - {homework_statuses.status_code}'
-            f', при переходе по {YA_PRACTICUM_HW_URL}'
+    try:
+        homework_statuses = requests.get(
+            YA_PRACTICUM_HW_URL,
+            headers={'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'},
+            params={'from_date': current_timestamp}
         )
+    # На случай, если нет подключения к интернету / неверная ссылка /
+    # Что то поломалось на серверах API и меня редиректит часто / таймаут
+    except requests.exceptions.RequestException as eror:
+        message = f'API недоступно - {eror}'
+        logger.critical(message)
+        raise Exception(message)
+
+    # Соит ли оставить эту проверку? или трай выше это выполняет итак?
+    # Как я понял RequestException учитывает и то, что может вернуться не 200
+    # код. Тогда это бесполезная проверка... Но! Вроде бы 302 не попадает
+    # в RequestException - тогда стоит оставить...
+    if homework_statuses.status_code != HTTPStatus.OK:
+        message = 'Сервер отвалился (код ответа страницы) - '
+        message += f'{homework_statuses.status_code}, при переходе по'
+        message += f'{YA_PRACTICUM_HW_URL}'
+        logger.critical(message)
+        raise ValueError(message)
     else:
         return homework_statuses.json()
 
 
 def send_message(message):
-    for key, sticker in STICKERS.items():
-        if message.find(key) != -1:
-            bot.send_sticker(
-                chat_id=CHAT_ID,
-                sticker=sticker
-            )
-            break
+    try:
+        for key, sticker in STICKERS.items():
+            if message.find(key) != -1:
+                bot.send_sticker(
+                    chat_id=CHAT_ID,
+                    sticker=sticker
+                )
+                break
 
-    logger.info(f'Бот отпрвил сообщение: {message}')
-    return bot.send_message(
-        chat_id=CHAT_ID,
-        text=message
-    )
+        logger.info(f'Бот отпрвил сообщение: {message}')
+        return bot.send_message(
+            chat_id=CHAT_ID,
+            text=message
+        )
+    except Exception as error:
+        message = f'Какие то проблемы с оптравкой msg - {error}'
+        logger.critical(message)
+        raise Exception(message)
+
+
+def check_json_keys(input_json):
+    '''Проверяем JSON от API'''
+    try:
+        input_json['current_date']
+        if input_json['homeworks']:
+            input_json['homeworks'][0]['homework_name']
+            input_json['homeworks'][0]['status']
+            input_json['homeworks'][0]['lesson_name']
+            input_json['homeworks'][0]['reviewer_comment']
+            input_json['homeworks'][0]['date_updated']
+        return True
+    except Exception as error:
+        message = f'В JSON ответе некорректный ключ: {error}'
+        logger.error(message)
+        # Или тут лучше Expectation? Когда кого лучше применять?)
+        raise KeyError(message)
 
 
 def main():
-    current_timestamp = int(time.time())  # Начальное значение timestamp
-    # current_timestamp = 1626455426
+    current_timestamp = int(time.time())
     logger.debug('Бот запущен!')
 
     while True:
         try:
-            hw_statuses_json = (get_homeworks(current_timestamp))
-            current_timestamp = hw_statuses_json['current_date']
+            hw_statuses_json = get_homeworks(current_timestamp)
+            if check_json_keys(hw_statuses_json):
+                if hw_statuses_json['homeworks']:
+                    logger.info(
+                        f'Пришли проверенные ДЗ: '
+                        f'{len(hw_statuses_json["homeworks"])} шт.'
+                    )
+                    for homework in reversed(hw_statuses_json['homeworks']):
+                        verdict = parse_homework_status(homework)
+                        send_message(verdict)
+                current_timestamp = hw_statuses_json['current_date']
 
-            #  Если что то есть в этом списке...
-            if hw_statuses_json['homeworks']:
-                logger.info(
-                    f'Пришли проверенные ДЗ: '
-                    f'{len(hw_statuses_json["homeworks"])} шт.'
-                )
-                # pprint(hw_statuses_json)
-                for homework in reversed(hw_statuses_json['homeworks']):
-                    verdict = parse_homework_status(homework)
-                    send_message(verdict)
-
-            time.sleep(13 * 60)  # Опрашивать раз в пять минут
+            time.sleep(13 * 60)
 
         except Exception as error:
+            # Если отправка сообщений работает - получим сообщение с ошибкой
             message = (
                 'Бот упал (ну вообще - не упал, а просто ошибка) '
                 f'с ошибкой: {error}'
             )
-            logger.error(error)
             send_message(message)
-            time.sleep(60)
+            time.sleep(5 * 60)
 
 
 if __name__ == '__main__':
