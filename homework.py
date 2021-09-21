@@ -146,6 +146,7 @@ def check_json_keys(input_json):
 def main():
     current_timestamp = int(time.time())
     logger.debug('Бот запущен!')
+    send_message('Бот запущен!')
 
     while True:
         try:
