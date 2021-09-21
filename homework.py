@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from http import HTTPStatus
-from typing import Dict
+from typing import Dict, List
 
 import requests
 import telegram
@@ -112,16 +112,29 @@ def send_message(message):
         raise Exception(message)
 
 
+def not_None(inputs: List):
+    out = True
+    for input in inputs:
+        if input is not None:
+            out = out and True
+        else:
+            raise TypeError(f'Значение None - {input}')
+    return out
+
+
 def check_json_keys(input_json):
     '''Проверяем JSON от API'''
     try:
-        input_json['current_date']
+        not_None([input_json['current_date']])
+        not_None([input_json['homeworks']])
         if input_json['homeworks']:
-            input_json['homeworks'][0]['homework_name']
-            input_json['homeworks'][0]['status']
-            input_json['homeworks'][0]['lesson_name']
-            input_json['homeworks'][0]['reviewer_comment']
-            input_json['homeworks'][0]['date_updated']
+            not_None([
+                input_json['homeworks'][0]['homework_name'],
+                input_json['homeworks'][0]['status'],
+                input_json['homeworks'][0]['lesson_name'],
+                input_json['homeworks'][0]['reviewer_comment'],
+                input_json['homeworks'][0]['date_updated']
+            ])
         return True
     except Exception as error:
         message = f'В JSON ответе некорректный ключ: {error}'
