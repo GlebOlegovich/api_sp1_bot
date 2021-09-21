@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from http import HTTPStatus
-from typing import Dict, List
+from typing import Dict
 
 import requests
 import telegram
@@ -112,34 +112,41 @@ def send_message(message):
         raise Exception(message)
 
 
-def not_None(inputs: List):
+def check_json_values(input_json: Dict):
     out = True
-    for input in inputs:
-        if input is not None:
-            out = out and True
-        else:
-            raise TypeError(f'Значение None - {input}')
+    if not input_json.get('current_date', False):
+        out = False
+        raise ValueError('"current_date" - None')
+    if input_json['homeworks']:
+        if not input_json.get('homeworks', False):
+            out = False
+            raise ValueError('"homeworks" - None')
+        expected_hw = [
+            'homework_name', 'status', 'lesson_name',
+            'reviewer_comment', 'date_updated'
+        ]
+        for i in expected_hw:
+            if not input_json['homeworks'][0].get(i, False):
+                out = False
+                raise ValueError(f'["homeworks"][0]["{i}"] - None')
     return out
 
 
-def check_json_keys(input_json):
+def check_json(input_json: Dict):
     '''Проверяем JSON от API'''
     try:
-        not_None([input_json['current_date']])
-        not_None([input_json['homeworks']])
+        input_json['current_date']
+        input_json['homeworks']
         if input_json['homeworks']:
-            not_None([
-                input_json['homeworks'][0]['homework_name'],
-                input_json['homeworks'][0]['status'],
-                input_json['homeworks'][0]['lesson_name'],
-                input_json['homeworks'][0]['reviewer_comment'],
-                input_json['homeworks'][0]['date_updated']
-            ])
-        return True
+            input_json['homeworks'][0]['homework_name'],
+            input_json['homeworks'][0]['status'],
+            input_json['homeworks'][0]['lesson_name'],
+            input_json['homeworks'][0]['reviewer_comment'],
+            input_json['homeworks'][0]['date_updated']
+        return check_json_values(input_json)
     except Exception as error:
-        message = f'В JSON ответе некорректный ключ: {error}'
+        message = f'В JSON ответе некорректный ключ/неверное значение: {error}'
         logger.error(message)
-        # Или тут лучше Expectation? Когда кого лучше применять?)
         raise KeyError(message)
 
 
@@ -151,7 +158,7 @@ def main():
     while True:
         try:
             hw_statuses_json = get_homeworks(current_timestamp)
-            if check_json_keys(hw_statuses_json):
+            if check_json(hw_statuses_json):
                 if hw_statuses_json['homeworks']:
                     logger.info(
                         f'Пришли проверенные ДЗ: '
