@@ -112,6 +112,7 @@ def send_message(message):
         raise Exception(message)
 
 
+# я уже не знаю как еще тут проверку сделать))
 def check_json_values(input_json: Dict):
     out = True
     if not input_json.get('current_date', False):
