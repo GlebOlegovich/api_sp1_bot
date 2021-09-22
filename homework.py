@@ -156,6 +156,7 @@ def main():
     logger.debug('Бот запущен!')
     send_message('Бот запущен!')
 
+    fal_down = []
     while True:
         try:
             hw_statuses_json = get_homeworks(current_timestamp)
@@ -169,16 +170,22 @@ def main():
                         verdict = parse_homework_status(homework)
                         send_message(verdict)
                 current_timestamp = hw_statuses_json['current_date']
-
-            time.sleep(13 * 60)
+            if fal_down:
+                send_message('Ошибки пропали - все ок')
+                fal_down.clear()
+            time.sleep(10 * 60)
 
         except Exception as error:
             # Если отправка сообщений работает - получим сообщение с ошибкой
-            message = (
-                'Бот упал (ну вообще - не упал, а просто ошибка) '
-                f'с ошибкой: {error}'
-            )
-            send_message(message)
+            print(error.__str__)
+            print(str(error))
+            if fal_down.count(f'{error}') == 0:
+                message = (
+                    'Бот упал (ну вообще - не упал, а просто ошибка) '
+                    f'с ошибкой: {error}'
+                )
+                fal_down.append(str(error))
+                send_message(message)
             time.sleep(5 * 60)
 
 
